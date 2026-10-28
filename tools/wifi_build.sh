@@ -22,11 +22,13 @@ make clean >/dev/null 2>&1
 echo "--- building (several minutes) ---"
 KV="$(uname -r)"
 # KSRC must be given explicitly: the Makefile only sets it inside the x86 branch we turned off (first attempt failed on that).
-make ARCH=arm64 KVER="$KV" KSRC="/lib/modules/$KV/build" -j4 >"$LOG" 2>&1
+make ARCH=arm64 KVER="$KV" KSRC="/lib/modules/$KV/build" -j2 >"$LOG" 2>&1      # 2 jobs: 4 cores + tether + dongle tripped the Nano over-current limit
 if ls "$D"/*.ko >/dev/null 2>&1; then
   echo "=== BUILD OK: $(ls "$D"/*.ko) ==="
   echo "Tell Claude 'build ok' - the install step comes next."
 else
   echo "=== BUILD FAILED. Last lines of $LOG: ==="
-  tail -12 "$LOG" | cut -c1-120
+  echo "--- FIRST compiler errors (these matter; the last lines do not) ---"
+  grep -n -m 6 -E "error:|fatal error:|undefined reference" "$LOG" | cut -c1-150
+  echo "--- full log: $LOG ---"
 fi
