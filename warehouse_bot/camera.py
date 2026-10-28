@@ -55,14 +55,52 @@ class SourceError(Exception):
     pass
 
 
+def find_realsense_dirs():
+    """Folders that contain a pyrealsense2 binding built for this Python (e.g. from an earlier librealsense build)."""
+    import sys
+    home = os.path.expanduser("~")
+    pats = [os.path.join(home, "librealsense*", "**", "pyrealsense2*.so"),
+            os.path.join(home, "*", "librealsense*", "**", "pyrealsense2*.so"),
+            "/usr/local/lib/**/pyrealsense2*.so", "/usr/lib/python3*/**/pyrealsense2*.so",
+            "/opt/**/pyrealsense2*.so"]
+    tag = "cpython-%d%dm" % (sys.version_info[0], sys.version_info[1])
+    found = []
+    for pat in pats:
+        try:
+            for f in glob.glob(pat, recursive=True):
+                if tag in os.path.basename(f) or "cpython" not in os.path.basename(f):
+                    d = os.path.dirname(f)
+                    if d not in found:
+                        found.append(d)
+        except Exception:
+            pass
+    return found
+
+
+def import_realsense():
+    """import pyrealsense2, searching for a previously built binding if it is not on the default path."""
+    import sys
+    try:
+        import pyrealsense2 as rs
+        return rs
+    except ImportError:
+        pass
+    for d in find_realsense_dirs():
+        if d not in sys.path:
+            sys.path.append(d)
+        try:
+            import pyrealsense2 as rs
+            return rs
+        except ImportError:
+            sys.path.remove(d)
+    raise SourceError("pyrealsense2 is not importable and no earlier build was found (see README)")
+
+
 class RealSenseSource(object):
     kind = KIND_LIVE
 
     def __init__(self, width=640, height=480, fps=15):
-        try:
-            import pyrealsense2 as rs
-        except ImportError:
-            raise SourceError("pyrealsense2 is not importable in this Python (see README: RealSense on Jetson)")
+        rs = import_realsense()
         self.rs = rs
         ctx = rs.context()
         devs = ctx.query_devices()

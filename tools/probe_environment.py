@@ -120,6 +120,15 @@ try:
         out("  -> no camera attached (borrowed camera not plugged in?). The dashboard will use SIMULATION or recorded data.")
 except ImportError:
     out("pyrealsense2 not importable from this Python.")
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+        from warehouse_bot.camera import find_realsense_dirs
+        cands = find_realsense_dirs()
+        out("earlier builds found: %s" % (cands or "none"))
+        if cands:
+            out("  -> the dashboard will use %s automatically (or: export PYTHONPATH=$PYTHONPATH:%s)" % (cands[0], cands[0]))
+    except Exception as e:
+        out("  (search failed: %s)" % e)
     out("  -> The librealsense install may exist only for another Python, or without python bindings.")
     out("  -> See README 'RealSense on Jetson' (do not rebuild everything; try the quick checks first).")
 except Exception as e:
