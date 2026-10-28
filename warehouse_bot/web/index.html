@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warehouse Robot Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">&#9881;</div>
+    <div>
+      <h1>Warehouse Robot</h1>
+      <p>SLAM-based navigation &amp; vision-guided docking &middot; Cognitive Robotics</p>
+    </div>
+  </div>
+  <div class="mode-switch" role="group" aria-label="Mode">
+    <button id="modeSim" data-mode="sim">SIMULATION</button>
+    <button id="modeHw" data-mode="hardware">HARDWARE</button>
+  </div>
+  <div class="chips">
+    <span id="dataLabel" class="chip">&hellip;</span>
+    <span id="linkChip" class="chip">&hellip;</span>
+    <span id="clock" class="chip dim"></span>
+  </div>
+  <button id="stopBtn" class="stop" title="Space / Esc">&#9632; STOP</button>
+</header>
+
+<div id="banner" class="banner"></div>
+
+<main>
+  <section class="col left">
+    <div class="card" id="teleopCard">
+      <h2>Teleoperation <span id="teleopTarget" class="tag"></span></h2>
+      <div class="dpad">
+        <span></span><button data-dir="F" class="dir">&#9650;<small>W</small></button><span></span>
+        <button data-dir="L" class="dir">&#9664;<small>A</small></button>
+        <button id="dpadStop" class="dir stopkey">&#9632;<small>Space</small></button>
+        <button data-dir="R" class="dir">&#9654;<small>D</small></button>
+        <span></span><button data-dir="B" class="dir">&#9660;<small>S</small></button><span></span>
+      </div>
+      <label class="slider">Pulse length <b id="pulseVal">250</b> ms
+        <input id="pulse" type="range" min="50" max="800" step="50" value="250"></label>
+      <p class="hint">Each press sends ONE short full-speed pulse (no PWM on this robot). Distance per pulse is
+        <b>not calibrated</b>.</p>
+    </div>
+
+    <div class="card" id="hwCard">
+      <h2>Hardware link</h2>
+      <div class="row">
+        <input id="port" placeholder="auto  (or /dev/ttyACM0, mock)" value="auto">
+        <button id="btnConnect" class="btn">Connect</button>
+      </div>
+      <div class="row">
+        <button id="btnArm" class="btn warn">ARM motors</button>
+        <button id="btnDisarm" class="btn">Disarm</button>
+        <button id="btnDisconnect" class="btn ghost">Disconnect</button>
+      </div>
+      <div class="kv" id="hwKv"></div>
+      <table class="enc"><thead><tr><th>TL</th><th>TR</th><th>BR</th><th>BL</th></tr></thead>
+        <tbody><tr id="encRow"><td>-</td><td>-</td><td>-</td><td>-</td></tr></tbody></table>
+      <p class="hint">Raw quadrature counts (uncalibrated). Left pair = TL+BL, right pair = TR+BR.</p>
+    </div>
+
+    <div class="card">
+      <h2>Command history</h2>
+      <ul id="history" class="log"></ul>
+    </div>
+  </section>
+
+  <section class="col mid">
+    <div class="grid2">
+      <figure class="view">
+        <figcaption>Obstacle perception <span class="tag" id="tagObs"></span></figcaption>
+        <img id="imgObs" alt="obstacle view">
+      </figure>
+      <figure class="view">
+        <figcaption>ArUco docking view <span class="tag" id="tagDock"></span></figcaption>
+        <img id="imgDock" alt="docking view">
+      </figure>
+      <figure class="view">
+        <figcaption>Depth <span class="tag" id="tagDepth"></span></figcaption>
+        <img id="imgDepth" alt="depth view">
+      </figure>
+      <figure class="view mapfig">
+        <figcaption>Warehouse map <span class="tag" id="tagMap"></span></figcaption>
+        <canvas id="map" width="640" height="480"></canvas>
+        <div class="legend" id="mapLegend"></div>
+      </figure>
+    </div>
+    <div class="card">
+      <h2>Spatial view &mdash; single-frame camera point cloud <span class="tag" id="tagCloud"></span></h2>
+      <div class="cloudwrap">
+        <canvas id="cloud" width="640" height="300"></canvas>
+        <div class="cloudside">
+          <button id="btnCloud" class="btn">Capture cloud</button>
+          <label class="chk"><input type="checkbox" id="cloudLive"> live (1 Hz)</label>
+          <button id="btnCloudSave" class="btn ghost">Save .ply</button>
+          <p class="hint" id="cloudNote">Drag to rotate. This is NOT a map and NOT SLAM.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col right">
+    <div class="card">
+      <h2>Autonomy</h2>
+      <div class="seg" id="behaviorSeg">
+        <button data-b="off">Manual</button>
+        <button data-b="avoid">Avoid</button>
+        <button data-b="dock">Dock</button>
+        <button data-b="mission" id="bMission">Mission</button>
+      </div>
+      <label class="chk big"><input type="checkbox" id="actToggle">
+        <span><b>Execute actions</b> <em id="actHint">(off = perception only: shows the decision, robot does not move)</em></span></label>
+      <label class="chk"><input type="checkbox" id="advToggle"> advance when path is clear</label>
+      <div id="autonomyStatus" class="pill">perception only</div>
+    </div>
+
+    <div class="card">
+      <h2>Obstacle detection</h2>
+      <div class="big" id="obsState">-</div>
+      <div class="kv" id="obsKv"></div>
+      <div class="fsm" id="avoidFsm"></div>
+      <p class="hint" id="obsText"></p>
+    </div>
+
+    <div class="card">
+      <h2>Vision-guided docking</h2>
+      <div class="big" id="dockState">-</div>
+      <div class="kv" id="dockKv"></div>
+      <div class="fsm" id="dockFsm"></div>
+      <div class="bar"><div id="dockBar"></div></div>
+      <p class="hint" id="dockText"></p>
+    </div>
+
+    <div class="card" id="missionCard">
+      <h2>Mission <span class="tag">simulation</span></h2>
+      <div class="kv" id="missionKv"></div>
+      <div class="row">
+        <button id="btnGoDock" class="btn">Go to dock</button>
+        <button id="btnWaypoint" class="btn ghost">Pick waypoint on map</button>
+      </div>
+    </div>
+
+    <div class="card" id="simCard">
+      <h2>Simulation</h2>
+      <div class="row">
+        <button id="simPause" class="btn">Pause</button>
+        <button id="simStep" class="btn">Step</button>
+        <button id="simReset" class="btn">Reset</button>
+      </div>
+      <p class="hint">Click the map to add/remove a box obstacle (or pick a waypoint after pressing the waypoint button).
+         Simple 2D kinematic model, not calibrated to the real robot.</p>
+      <div class="kv" id="simKv"></div>
+    </div>
+
+    <div class="card">
+      <h2>Evidence capture</h2>
+      <div class="row">
+        <button id="btnShot" class="btn">Snapshot</button>
+        <button id="recObs" class="btn" data-rec="obstacle">&#9679; rec obstacle</button>
+        <button id="recDock" class="btn" data-rec="dock">&#9679; rec dock</button>
+      </div>
+      <div class="row">
+        <select id="camSel">
+          <option value="auto">Camera: auto (RealSense)</option>
+          <option value="realsense">RealSense D455</option>
+          <option value="webcam">Webcam (RGB only)</option>
+          <option value="none">No camera</option>
+        </select>
+        <button id="btnCam" class="btn ghost">Open</button>
+      </div>
+      <p class="hint" id="captureMsg">Files go to the <code>results/</code> folder.</p>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Laptop (simulation, tests, replaying recorded sessions). Python 3.8+ is fine here.
+numpy
+opencv-contrib-python   # contrib build is required for cv2.aruco on older versions
+pyserial

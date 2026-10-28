@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+# generated evidence: keep README, ignore bulky outputs unless you decide to commit specific files
+results/*
+!results/README.md

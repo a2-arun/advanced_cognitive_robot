@@ -1,0 +1,4 @@
+# Jetson Nano / JetPack 4.6.1 / Python 3.6.9
+# numpy and OpenCV (cv2) come from JetPack - do NOT pip install them over the system versions.
+# pyrealsense2 comes from your existing librealsense install.
+pyserial==3.5
