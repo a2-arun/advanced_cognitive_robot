@@ -76,6 +76,8 @@ class Engine(object):
         self.frame = None
         self.percep = {}
         self.jpgs = {"obstacle": b"", "depth": b"", "dock": b""}
+        self.views = {}                  # latest annotated images (numpy)
+        self.stream_seen = {}            # stream name -> last time a browser asked for it (encode only watched ones)
         self.jpg_seq = 0
         self.jpg_cv = threading.Condition()
         self.recorders = {}
@@ -432,8 +434,11 @@ class Engine(object):
             v_obs = placeholder("NO CAMERA", self.source_msg)
             v_dock = placeholder("NO CAMERA", self.source_msg)
             v_depth = placeholder("NO DEPTH STREAM", self.source_msg)
+        self.views = {"obstacle": v_obs, "dock": v_dock, "depth": v_depth}
+        wanted = set(self.recorders.keys()) | set(n for n, t in list(self.stream_seen.items()) if now - t < 6.0)
+        encoded = dict((n, jpeg(self.views[n])) for n in wanted)      # JPEG-encode only what is being watched
         with self.jpg_cv:
-            self.jpgs = {"obstacle": jpeg(v_obs), "depth": jpeg(v_depth), "dock": jpeg(v_dock)}
+            self.jpgs.update(encoded)
             self.jpg_seq += 1
             self.jpg_cv.notify_all()
         for name, img in (("obstacle", v_obs), ("dock", v_dock), ("depth", v_depth)):
@@ -556,12 +561,10 @@ class Engine(object):
         os.makedirs(d, exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S")
         saved = []
-        for name, data in self.jpgs.items():
-            if data:
-                p = os.path.join(d, "%s_%s_%s.jpg" % (stamp, self.mode, name))
-                with open(p, "wb") as f:
-                    f.write(data)
-                saved.append(p)
+        for name, img in sorted(self.views.items()):
+            p = os.path.join(d, "%s_%s_%s.jpg" % (stamp, self.mode, name))
+            cv2.imwrite(p, img)
+            saved.append(p)
         p = os.path.join(d, "%s_%s_state.json" % (stamp, self.mode))
         with open(p, "w") as f:
             json.dump(self.get_state(), f, indent=1, default=str)

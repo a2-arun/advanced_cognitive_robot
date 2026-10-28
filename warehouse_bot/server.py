@@ -12,6 +12,7 @@ import signal
 import socket
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
@@ -108,6 +109,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         seq = -1
         while True:
+            eng.stream_seen[name] = time.time()
             with eng.jpg_cv:
                 eng.jpg_cv.wait_for(lambda: eng.jpg_seq != seq, timeout=3.0)
                 seq = eng.jpg_seq
@@ -231,6 +233,7 @@ def main(argv=None):
     ap.add_argument("--serial-port", help="e.g. /dev/ttyACM0, or 'mock' for the software test firmware")
     ap.add_argument("--camera", help="auto|realsense|webcam|video:<file>|session:<dir>|none")
     ap.add_argument("--results", help="results folder (default ./results)")
+    ap.add_argument("--resolution", help="camera size WxH, e.g. 424x240 (much faster on the Jetson Nano)")
     a = ap.parse_args(argv)
 
     cfg = load_config(a.config)
@@ -238,6 +241,9 @@ def main(argv=None):
         cfg["server"]["results_dir"] = a.results
     if a.camera:
         cfg["camera"]["source"] = a.camera
+    if a.resolution:
+        w, h = a.resolution.lower().split("x")
+        cfg["camera"]["width"], cfg["camera"]["height"] = int(w), int(h)
     eng, httpd, token = build_server(cfg, a.host, a.port)
     eng.start()
     if a.mode == "hardware":
