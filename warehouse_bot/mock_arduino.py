@@ -201,7 +201,9 @@ class MockArduino(object):
                 dt = now - self._last_tick
                 self._last_tick = now
                 l, r = self.motor_levels
-                for i, lvl in enumerate((l, r, r, l)):      # TL, TR, BR, BL
+                # TL, TR, BR, BL. The mock models the real robot: right-side encoders are mounted mirrored,
+                # so their RAW counts go down on forward (the host corrects this with serial.encoder_signs).
+                for i, lvl in enumerate((l, -r, -r, l)):
                     self.enc[i] += lvl * FAKE_COUNTS_PER_S * dt
                 if self.motion == "MOVING":
                     if now >= self.move_end:

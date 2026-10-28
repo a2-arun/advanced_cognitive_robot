@@ -64,6 +64,7 @@ class RobotLink(object):
         self.timeouts = 0                    # EVT TIMEOUT count from firmware
         self.last_done = None
         self.hb_enabled = True               # test hook
+        self.signs = list(self.scfg.get("encoder_signs", [1, 1, 1, 1]))
 
     # ------------------------------------------------------------------ connection
     def connect(self, port=None):
@@ -275,7 +276,7 @@ class RobotLink(object):
         if k == "T":
             self.state = m["state"]
             self.armed = m["armed"]
-            self.enc = m["enc"]
+            self.enc = [c * s for c, s in zip(m["enc"], self.signs)]
             self.last_telem = time.time()
         elif k in ("OK", "ERR"):
             slot = self._pending.get(m["seq"])
@@ -289,7 +290,7 @@ class RobotLink(object):
                 self._note("FIRMWARE WATCHDOG TIMEOUT: motors stopped, disarmed", "error")
             elif name == "DONE":
                 self.last_done = m
-                self._note("pulse done %s enc(TL,TR,BR,BL)=%s" % (m.get("dir"), m.get("enc")))
+                self._note("pulse done %s enc(TL,TR,BR,BL)=%s" % (m.get("dir"), [c * s for c, s in zip(m.get("enc", [0, 0, 0, 0]), self.signs)]))
             elif name == "BOOT":
                 self._note("firmware boot: %s" % m["text"])
             else:

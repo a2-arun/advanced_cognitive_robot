@@ -16,6 +16,9 @@ DEFAULTS = {
         "heartbeat_s": 0.2,           # host -> Arduino watchdog refresh
         "telemetry_timeout_s": 1.0,   # no telemetry for this long => link considered DOWN
         "ack_timeout_s": 0.6,
+        # Measured with tools/check_hardware.py on the real robot: the two RIGHT-side encoders (TR, BR) count down
+        # when the wheel turns forward (mirrored mounting). Order: TL, TR, BR, BL. Applied in software, no re-flash.
+        "encoder_signs": [1, -1, -1, 1],
     },
     "motion": {
         # Motors have NO PWM: every movement is a full-speed pulse. Distances are NOT known until calibrated.

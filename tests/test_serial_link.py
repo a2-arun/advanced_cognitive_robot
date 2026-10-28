@@ -67,6 +67,14 @@ class LinkTests(unittest.TestCase):
         self.assertTrue(all(c > 100 for c in self.link.enc), self.link.enc)
         self.assertIsNotNone(self.link.last_done)
 
+    def test_right_side_raw_counts_are_corrected_by_encoder_signs(self):
+        self.link.arm()
+        time.sleep(0.15)
+        self.assertTrue(self.link.move("F", 300)["ok"])
+        time.sleep(0.8)
+        self.assertLess(self.mock.enc[1], 0)          # raw (mirrored) right encoder counts down
+        self.assertGreater(self.link.enc[1], 0)       # corrected value counts up like the left side
+
     def test_turn_signs(self):
         self.link.arm()
         time.sleep(0.15)
