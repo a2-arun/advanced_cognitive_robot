@@ -12,7 +12,7 @@ grep -n -E "^CONFIG_PLATFORM_[A-Z0-9_]+ *=" Makefile | head -30
 cp -n Makefile Makefile.orig
 sed -i 's/^CONFIG_PLATFORM_I386_PC *= *y/CONFIG_PLATFORM_I386_PC = n/' Makefile
 CHOSEN=none
-for P in JETSON ARM_AARCH64 ARM64; do
+for P in JETSON ARM_AARCH64 ARM64_RPI ARM64; do   # ARM64_RPI = generic aarch64 settings, commonly reused on Jetson
   if grep -q "^CONFIG_PLATFORM_${P} *=" Makefile; then
     sed -i "s/^CONFIG_PLATFORM_${P} *= *n/CONFIG_PLATFORM_${P} = y/" Makefile; CHOSEN=$P; break
   fi
@@ -20,7 +20,9 @@ done
 echo "--- ARM64 platform flag enabled: $CHOSEN ---"
 make clean >/dev/null 2>&1
 echo "--- building (several minutes) ---"
-make ARCH=arm64 -j4 >"$LOG" 2>&1
+KV="$(uname -r)"
+# KSRC must be given explicitly: the Makefile only sets it inside the x86 branch we turned off (first attempt failed on that).
+make ARCH=arm64 KVER="$KV" KSRC="/lib/modules/$KV/build" -j4 >"$LOG" 2>&1
 if ls "$D"/*.ko >/dev/null 2>&1; then
   echo "=== BUILD OK: $(ls "$D"/*.ko) ==="
   echo "Tell Claude 'build ok' - the install step comes next."
