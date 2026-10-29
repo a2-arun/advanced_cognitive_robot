@@ -541,8 +541,9 @@ class Engine(object):
         f = self.frame
         if f is None or f.depth is None or f.intrinsics is None:
             return {"ok": False, "error": "no depth frame available - nothing to project (no invented points)"}
-        pts, cols = pcl.depth_to_points(f.depth, f.intrinsics, f.color, stride=6, zmin=self.ocfg["min_range_m"],
-                                        zmax=self.ocfg["max_range_m"])
+        stride, maxp = (2, 80000) if save else (4, 14000)     # the saved .ply is much denser than the live view
+        pts, cols = pcl.depth_to_points(f.depth, f.intrinsics, f.color, stride=stride, zmin=self.ocfg["min_range_m"],
+                                        zmax=self.ocfg["max_range_m"], max_points=maxp)
         out = {"ok": True, "n": int(len(pts)), "kind": f.kind.upper(), "label": f.label,
                "note": "single-frame camera point cloud (camera frame). Not a map, not SLAM.",
                "points": np.round(pts, 3).tolist(),
