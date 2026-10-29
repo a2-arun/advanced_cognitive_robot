@@ -233,6 +233,8 @@ def main(argv=None):
     ap.add_argument("--serial-port", help="e.g. /dev/ttyACM0, or 'mock' for the software test firmware")
     ap.add_argument("--camera", help="auto|realsense|webcam|video:<file>|session:<dir>|none")
     ap.add_argument("--results", help="results folder (default ./results)")
+    ap.add_argument("--marker-id", type=int, help="ArUco id of the docking marker (default 0)")
+    ap.add_argument("--marker-size-cm", type=float, help="MEASURED edge of the black square, in cm (default 10)")
     ap.add_argument("--resolution", help="camera size WxH, e.g. 424x240 (much faster on the Jetson Nano)")
     a = ap.parse_args(argv)
 
@@ -241,6 +243,10 @@ def main(argv=None):
         cfg["server"]["results_dir"] = a.results
     if a.camera:
         cfg["camera"]["source"] = a.camera
+    if a.marker_id is not None:
+        cfg["docking"]["marker_id"] = a.marker_id
+    if a.marker_size_cm:
+        cfg["docking"]["marker_size_m"] = a.marker_size_cm / 100.0
     if a.resolution:
         w, h = a.resolution.lower().split("x")
         cfg["camera"]["width"], cfg["camera"]["height"] = int(w), int(h)
