@@ -31,7 +31,7 @@
       el.appendChild(s);
     });
   }
-  function kindClass(k) { k = (k || "").toLowerCase(); return k.indexOf("sim") === 0 ? "sim" : k === "live" ? "live" : k === "recorded" ? "recorded" : ""; }
+  function kindClass(k) { k = (k || "").toLowerCase(); return k.indexOf("proxy") >= 0 || k.indexOf("sim") === 0 ? "sim" : k.indexOf("live") === 0 ? "live" : k === "recorded" ? "recorded" : ""; }
 
   // ---------------------------------------------------------------- streams
   function bindStream(id, name) {
@@ -57,8 +57,9 @@
     var sim = S.mode === "sim", hw = S.hw, auto = S.behavior !== "off";
     $("modeSim").className = sim ? "on" : ""; $("modeHw").className = sim ? "" : "on";
     var dl = $("dataLabel");
-    dl.textContent = sim ? "SIMULATED DATA" : (S.data_label === "LIVE" ? "LIVE CAMERA DATA" : S.data_label === "RECORDED" ? "RECORDED FOOTAGE" : "NO CAMERA");
-    dl.className = "chip " + (sim ? "sim" : kindClass(S.data_label) || "bad");
+    var dlab = S.data_label || "", proxyOn = dlab.indexOf("PROXY") >= 0;
+    dl.textContent = sim ? "SIMULATED DATA" : (proxyOn ? "LIVE WEBCAM + MARKER-OBSTACLE PROXY (no depth sensor)" : dlab === "LIVE" ? "LIVE CAMERA DATA" : dlab === "RECORDED" ? "RECORDED FOOTAGE" : "NO CAMERA");
+    dl.className = "chip " + (sim ? "sim" : (proxyOn ? "sim" : kindClass(dlab) || "bad"));
     var lc = $("linkChip");
     if (sim) { lc.textContent = "SIM: no motor commands are sent"; lc.className = "chip sim"; }
     else if (!hw.connected) { lc.textContent = "SERIAL: not connected"; lc.className = "chip bad"; }
@@ -67,7 +68,7 @@
     $("clock").textContent = S.time + " · " + S.camera.fps + " fps";
     if (sim) banner("sim", "SIMULATION MODE — everything on this page is simulated. No physical motor command can be sent from here.");
     else if (hw.connected && !hw.link_ok) banner("alert", "HARDWARE LINK LOST — hardware commands are blocked. The Arduino stops the motors by itself.");
-    else banner("hw", "HARDWARE MODE — buttons move the REAL robot (full speed, short pulses). Wheels lifted for first tests. STOP is always active.");
+    else banner("hw", "HARDWARE MODE — buttons move the REAL robot (full speed, short pulses). Wheels lifted for first tests. STOP is always active." + (proxyOn ? "  OBSTACLES ARE ARUCO-TAGGED PROXIES: no depth sensor in use." : ""));
 
     $("hwCard").style.display = sim ? "none" : "";
     $("simCard").style.display = sim ? "" : "none";

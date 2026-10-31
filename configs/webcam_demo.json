@@ -1,0 +1,5 @@
+{
+  "motion": {"default_pulse_ms": 150, "settle_s": 0.8},
+  "obstacle": {"turn_pulse_ms": 250, "advance_pulse_ms": 200, "stop_distance_m": 0.8},
+  "docking": {"align_pulse_ms": 80, "approach_pulse_ms": 200, "near_pulse_ms": 100, "settle_s": 0.8}
+}

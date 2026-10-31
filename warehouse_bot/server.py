@@ -233,6 +233,11 @@ def main(argv=None):
     ap.add_argument("--serial-port", help="e.g. /dev/ttyACM0, or 'mock' for the software test firmware")
     ap.add_argument("--camera", help="auto|realsense|webcam|video:<file>|session:<dir>|none")
     ap.add_argument("--results", help="results folder (default ./results)")
+    ap.add_argument("--focal-px", type=float, help="webcam focal length in pixels (tools/calibrate_webcam_focal.py)")
+    ap.add_argument("--webcam-index", type=int, help="which webcam (0 = the laptop's own, 1 = first external)")
+    ap.add_argument("--obstacle-marker-id", type=int,
+                    help="treat boxes tagged with this ArUco id as obstacles (no depth camera)")
+    ap.add_argument("--dock-distance-cm", type=float, help="stop docking at this camera-to-marker distance (default 40)")
     ap.add_argument("--aruco-dict", help="marker family, e.g. DICT_4X4_50 (default) or DICT_6X6_50")
     ap.add_argument("--marker-id", type=int, help="ArUco id of the docking marker (default 0)")
     ap.add_argument("--marker-size-cm", type=float, help="MEASURED edge of the black square, in cm (default 10)")
@@ -244,6 +249,14 @@ def main(argv=None):
         cfg["server"]["results_dir"] = a.results
     if a.camera:
         cfg["camera"]["source"] = a.camera
+    if a.focal_px:
+        cfg["camera"]["focal_px"] = a.focal_px
+    if a.webcam_index is not None:
+        cfg["camera"]["webcam_index"] = a.webcam_index
+    if a.obstacle_marker_id is not None:
+        cfg["proxy"]["obstacle_marker_id"] = a.obstacle_marker_id
+    if a.dock_distance_cm:
+        cfg["docking"]["dock_distance_m"] = a.dock_distance_cm / 100.0
     if a.aruco_dict:
         cfg["docking"]["aruco_dict"] = a.aruco_dict
     if a.marker_id is not None:

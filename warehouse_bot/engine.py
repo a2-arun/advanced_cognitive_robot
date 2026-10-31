@@ -23,6 +23,7 @@ from . import docking as dk
 from . import perception as pc
 from . import pointcloud as pcl
 from .odometry import Odometry
+from .proxy import MarkerObstacleProxy
 from .serial_robot import RobotLink
 from .sim import Sim, MARKER_SIM_SIZE_M
 
@@ -99,6 +100,11 @@ class Engine(object):
         self.dcfg = d
         self._make_aruco(d)
         self.dock = dk.DockingFSM(d, self.mcfg)
+        pid = self.cfg.get("proxy", {}).get("obstacle_marker_id")
+        self.proxy = None
+        if pid is not None and self.mode != "sim" and self.aruco is not None:
+            self.proxy = MarkerObstacleProxy(self.aruco, pid, d["marker_size_m"], self.cfg["obstacle"]["max_range_m"],
+                                             self.cfg["proxy"].get("obstacle_width_factor", 3.0))
 
     def _make_aruco(self, dcfg):
         try:
@@ -389,9 +395,14 @@ class Engine(object):
     # ------------------------------------------------------------------ perception cycle
     def _process(self, frame, now):
         self.frame = frame
-        depth = frame.depth if frame else None
+        real_depth = frame.depth if frame else None
+        depth = real_depth
         color = frame.color if frame else None
         kind_text = frame.kind.upper() if frame else "NO CAMERA"
+        proxy_seen = None
+        if real_depth is None and self.proxy is not None and frame is not None and frame.intrinsics is not None:
+            depth, proxy_seen = self.proxy.depth(color, frame.intrinsics)      # stand-in, NOT measured depth
+            kind_text += " + MARKER-OBSTACLE PROXY"
         label = frame.label if frame else self.source_msg
         acting = self.act and self._motion_allowed()
         mode_text = ("ACTING" if acting else "PERCEPTION ONLY") + (" | SIM" if self.mode == "sim" else " | HARDWARE")
@@ -402,7 +413,7 @@ class Engine(object):
         dock_can = acting and (self.behavior == "dock" or (self.behavior == "mission" and mstage == "DOCK"))
 
         if frame is not None and self.aruco is not None:
-            obs = self.aruco.observe(color, depth, frame.intrinsics)
+            obs = self.aruco.observe(color, real_depth, frame.intrinsics)      # never the proxy depth
         else:
             obs = dk.MarkerObservation()
 
@@ -428,8 +439,14 @@ class Engine(object):
             v_depth = pc.colorize_depth(depth, self.ocfg["max_range_m"]) if depth is not None else \
                 placeholder("NO DEPTH STREAM", "distance is NOT estimated without depth")
             if depth is not None:
-                cv2.putText(v_depth, kind_text + " DEPTH", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2,
+                cv2.putText(v_depth, "PROXY DEPTH: tagged boxes only, NOT measured" if proxy_seen is not None
+                            else kind_text + " DEPTH", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2,
                             cv2.LINE_AA)
+            for s in (proxy_seen or []):
+                hh = v_obs.shape[0]
+                cv2.rectangle(v_obs, (s["cols"][0], 40), (s["cols"][1], hh - 56), (0, 165, 255), 2)
+                cv2.putText(v_obs, "TAGGED BOX %.2f m" % s["distance_m"], (s["cols"][0] + 4, 58),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2, cv2.LINE_AA)
         else:
             v_obs = placeholder("NO CAMERA", self.source_msg)
             v_dock = placeholder("NO CAMERA", self.source_msg)
@@ -447,7 +464,8 @@ class Engine(object):
                 w.write(cv2.resize(img, (640, 480)))
 
         self.percep = {"det": det, "avoid": avoid_out, "obs": obs.to_dict(), "dock": dock_out, "kind": kind_text,
-                       "label": label, "acting": acting, "has_depth": depth is not None}
+                       "label": label, "acting": acting, "has_depth": real_depth is not None,
+                       "proxy": proxy_seen is not None}
         for key, val in (("avoid", avoid_out["state"]), ("dock", dock_out["state"]), ("obstacle_det", det["state"])):
             if self._last_states.get(key) != val:
                 self._last_states[key] = val
@@ -525,6 +543,7 @@ class Engine(object):
                                                                      "inactive": True},
                 "camera": {"label": p.get("label", self.source_msg), "kind": p.get("kind"),
                            "message": self.source_msg, "has_depth": p.get("has_depth", False),
+                           "proxy": p.get("proxy", False),
                            "fps": round(self.fps, 1)},
                 "obstacle": {"det": p.get("det"), "fsm": p.get("avoid")},
                 "docking": {"obs": p.get("obs"), "fsm": p.get("dock"), "marker_size_m": self.dcfg["marker_size_m"],

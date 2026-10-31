@@ -64,6 +64,24 @@ class MarkerObservation(object):
                                                             round(float(self.center[1]), 1)]}
 
 
+def marker_pnp_distance(quad, size_m, intr, w, h):
+    """Distance (m, along the optical axis) to a square marker of known edge length from its 4 image corners.
+    Needs camera intrinsics. Returns None if it cannot be computed. Nothing is assumed or invented."""
+    if intr is None or not size_m:
+        return None
+    s = size_m / 2.0
+    obj = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
+    K = intr.scaled(w, h).matrix() if (intr.width != w or intr.height != h) else intr.matrix()
+    try:
+        flag = getattr(cv2, "SOLVEPNP_IPPE_SQUARE", cv2.SOLVEPNP_ITERATIVE)
+        ok, rvec, tvec = cv2.solvePnP(obj, quad, K, intr.dist(), flags=flag)
+        if ok and tvec[2][0] > 0:
+            return float(tvec[2][0])
+    except cv2.error:
+        pass
+    return None
+
+
 class ArucoDetector(object):
     def __init__(self, dcfg, ocfg=None):
         self.c = dcfg
@@ -75,6 +93,14 @@ class ArucoDetector(object):
         else:
             params = cv2.aruco.DetectorParameters_create()
             self._detect = lambda g: cv2.aruco.detectMarkers(g, self.dict, parameters=params)[:2]
+
+    def detect_all(self, color):
+        """Every marker of this dictionary in the frame: list of (id, 4x2 corner array)."""
+        gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY) if color.ndim == 3 else color
+        corners, ids = self._detect(gray)
+        if ids is None or len(ids) == 0:
+            return []
+        return [(int(i), c.reshape(4, 2).astype(np.float64)) for i, c in zip(ids.flatten().tolist(), corners)]
 
     def observe(self, color, depth=None, intr=None):
         obs = MarkerObservation()
@@ -102,17 +128,7 @@ class ArucoDetector(object):
             if ok.size >= 6:
                 obs.depth_distance_m = float(np.median(ok))
         # (2) PnP from known marker size + intrinsics
-        if intr is not None and self.c.get("marker_size_m"):
-            s = self.c["marker_size_m"] / 2.0
-            obj = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
-            K = intr.scaled(w, h).matrix() if (intr.width != w or intr.height != h) else intr.matrix()
-            try:
-                flag = getattr(cv2, "SOLVEPNP_IPPE_SQUARE", cv2.SOLVEPNP_ITERATIVE)
-                ok, rvec, tvec = cv2.solvePnP(obj, quad, K, intr.dist(), flags=flag)
-                if ok and tvec[2][0] > 0:
-                    obs.pnp_distance_m = float(tvec[2][0])
-            except cv2.error:
-                pass
+        obs.pnp_distance_m = marker_pnp_distance(quad, self.c.get("marker_size_m"), intr, w, h)
         if obs.depth_distance_m is not None:
             obs.distance_m, obs.distance_src = obs.depth_distance_m, "depth"
         elif obs.pnp_distance_m is not None:

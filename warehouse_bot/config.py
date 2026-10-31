@@ -33,6 +33,12 @@ DEFAULTS = {
         "height": 480,
         "fps": 15,                    # Jetson Nano USB3 + depth: 15 fps is plenty for stop-and-go motion
         "webcam_index": 0,
+        "focal_px": None,             # webcam only: focal length in pixels at `width` (tools/calibrate_webcam_focal.py)
+    },
+    "proxy": {
+        # Stand-in for a depth camera: a box tagged with its own ArUco marker is treated as the obstacle.
+        "obstacle_marker_id": None,   # e.g. 3 (same dictionary as the docking marker); None = off
+        "obstacle_width_factor": 3.0, # tagged box assumed this many marker-widths wide
     },
     "obstacle": {
         # Regions of interest as fractions of the image (x0, x1, y0, y1).

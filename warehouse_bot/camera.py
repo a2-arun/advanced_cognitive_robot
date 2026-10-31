@@ -141,19 +141,25 @@ class WebcamSource(object):
     """Plain RGB camera (laptop webcam, or the D455 colour stream exposed as /dev/video*). NO depth."""
     kind = KIND_LIVE
 
-    def __init__(self, index=0, width=640, height=480):
+    def __init__(self, index=0, width=640, height=480, focal_px=None):
         self.cap = cv2.VideoCapture(index)
         if not self.cap.isOpened():
             raise SourceError("cannot open webcam index %s" % index)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.label = "LIVE webcam #%s (RGB only, no depth)" % index
+        self.focal_px, self.calib_width = focal_px, float(width)
+        self.label = "LIVE webcam #%s (RGB only, no depth%s)" % (index, ", focal calibrated" if focal_px else "")
 
     def read(self):
         ok, img = self.cap.read()
         if not ok:
             return None
-        return Frame(img, None, None, KIND_LIVE, self.label)
+        intr = None
+        if self.focal_px:                      # pinhole model, no lens distortion; scaled if the size differs
+            h, w = img.shape[:2]
+            f = self.focal_px * w / self.calib_width
+            intr = Intrinsics(w, h, f, f, w / 2.0, h / 2.0)
+        return Frame(img, None, intr, KIND_LIVE, self.label)
 
     def close(self):
         self.cap.release()
@@ -243,7 +249,7 @@ def open_source(spec, cfg):
         if spec == "realsense":
             return RealSenseSource(c["width"], c["height"], c["fps"]), "RealSense opened"
         if spec == "webcam":
-            return WebcamSource(c["webcam_index"], c["width"], c["height"]), "webcam opened"
+            return WebcamSource(c["webcam_index"], c["width"], c["height"], c.get("focal_px")), "webcam opened"
         if spec.startswith("video:"):
             return VideoFileSource(spec[6:]), "video opened"
         if spec.startswith("session:"):
