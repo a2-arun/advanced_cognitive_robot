@@ -15,6 +15,10 @@ from .docking import marker_pnp_distance
 
 
 class MarkerObstacleProxy(object):
+    kind_label = "MARKER-OBSTACLE PROXY"
+    depth_note = "PROXY DEPTH: tagged boxes only, NOT measured"
+    item_label = "TAGGED BOX"
+
     def __init__(self, detector, obstacle_id, size_m, far_m, width_factor=3.0):
         self.detector = detector
         self.obstacle_id = obstacle_id

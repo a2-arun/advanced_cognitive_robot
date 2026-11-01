@@ -51,6 +51,7 @@ Chips at the top always say where the data comes from: **SIMULATED DATA / LIVE C
 | Calibrate odometry | `python3 tools/calibrate_odometry.py --port /dev/ttyACM0` | Needs the robot on the floor and a tape measure. Optional. Only matters for dead-reckoned paths. |
 | Which camera is which (webcam index) | `python tools/list_cameras.py` | Run this before `--webcam-index N`. Saves a labelled picture to `results/cameras/`. |
 | Webcam focal length | `python tools/calibrate_webcam_focal.py --distance-cm 50 --index N` | Needed for docking distance without a depth camera. |
+| See what the YOLO bottle detector sees | `python tools/check_bottle_detection.py --index N --focal-px F --bottle-height-cm H` | Live window, box + estimated distance. `--all` lists every object it recognises. |
 | Print an ArUco marker | `python tools/make_aruco_marker.py --size-cm 10 --id 0` | Prints a PNG to `results/markers/`. `--dict DICT_6X6_50` for other families. |
 
 ## 3. Wi-Fi setup scripts (Jetson, only needed once; already done for you)

@@ -58,7 +58,7 @@
     $("modeSim").className = sim ? "on" : ""; $("modeHw").className = sim ? "" : "on";
     var dl = $("dataLabel");
     var dlab = S.data_label || "", proxyOn = dlab.indexOf("PROXY") >= 0;
-    dl.textContent = sim ? "SIMULATED DATA" : (proxyOn ? "LIVE WEBCAM + MARKER-OBSTACLE PROXY (no depth sensor)" : dlab === "LIVE" ? "LIVE CAMERA DATA" : dlab === "RECORDED" ? "RECORDED FOOTAGE" : "NO CAMERA");
+    dl.textContent = sim ? "SIMULATED DATA" : (proxyOn ? "LIVE WEBCAM + " + (dlab.indexOf("YOLO") >= 0 ? "YOLO-BOTTLE PROXY" : "MARKER-OBSTACLE PROXY") + " (no depth sensor)" : dlab === "LIVE" ? "LIVE CAMERA DATA" : dlab === "RECORDED" ? "RECORDED FOOTAGE" : "NO CAMERA");
     dl.className = "chip " + (sim ? "sim" : (proxyOn ? "sim" : kindClass(dlab) || "bad"));
     var lc = $("linkChip");
     if (sim) { lc.textContent = "SIM: no motor commands are sent"; lc.className = "chip sim"; }
@@ -68,7 +68,7 @@
     $("clock").textContent = S.time + " · " + S.camera.fps + " fps";
     if (sim) banner("sim", "SIMULATION MODE — everything on this page is simulated. No physical motor command can be sent from here.");
     else if (hw.connected && !hw.link_ok) banner("alert", "HARDWARE LINK LOST — hardware commands are blocked. The Arduino stops the motors by itself.");
-    else banner("hw", "HARDWARE MODE — buttons move the REAL robot (full speed, short pulses). Wheels lifted for first tests. STOP is always active." + (proxyOn ? "  OBSTACLES ARE ARUCO-TAGGED PROXIES: no depth sensor in use." : ""));
+    else banner("hw", "HARDWARE MODE — buttons move the REAL robot (full speed, short pulses). Wheels lifted for first tests. STOP is always active." + (proxyOn ? (dlab.indexOf("YOLO") >= 0 ? "  OBSTACLE = BOTTLE FOUND BY YOLO, DISTANCE ESTIMATED FROM ITS SIZE: no depth sensor in use." : "  OBSTACLES ARE ARUCO-TAGGED PROXIES: no depth sensor in use.") : ""));
 
     $("hwCard").style.display = sim ? "none" : "";
     $("simCard").style.display = sim ? "" : "none";

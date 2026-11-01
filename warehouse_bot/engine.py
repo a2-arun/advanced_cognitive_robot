@@ -24,6 +24,7 @@ from . import perception as pc
 from . import pointcloud as pcl
 from .odometry import Odometry
 from .proxy import MarkerObstacleProxy
+from .yolo_proxy import BottleObstacleProxy, UltralyticsDetector
 from .serial_robot import RobotLink
 from .sim import Sim, MARKER_SIM_SIZE_M
 
@@ -100,9 +101,22 @@ class Engine(object):
         self.dcfg = d
         self._make_aruco(d)
         self.dock = dk.DockingFSM(d, self.mcfg)
-        pid = self.cfg.get("proxy", {}).get("obstacle_marker_id")
+        pcfg = self.cfg.get("proxy", {})
+        pid = pcfg.get("obstacle_marker_id")
         self.proxy = None
-        if pid is not None and self.mode != "sim" and self.aruco is not None:
+        self.proxy_err = None
+        if pcfg.get("yolo_bottle") and self.mode != "sim":
+            try:
+                if getattr(self, "_yolo", None) is None:        # loading the model is slow: do it once, not on every mode switch
+                    self._yolo = UltralyticsDetector(pcfg.get("yolo_model", "yolov8n.pt"), pcfg.get("yolo_classes", ["bottle"]),
+                                                     pcfg.get("yolo_conf", 0.30), pcfg.get("yolo_imgsz", 480))
+                hcm = pcfg.get("bottle_height_cm")
+                self.proxy = BottleObstacleProxy(self._yolo, (hcm / 100.0) if hcm else None, self.cfg["obstacle"]["max_range_m"],
+                                                 pcfg.get("obstacle_width_factor", 3.0))
+            except Exception as e:                             # missing package / no weights / no height: say so, never fake it
+                self.proxy_err = "%s: %s" % (type(e).__name__, e)
+                print("YOLO bottle detector unavailable -", self.proxy_err)
+        elif pid is not None and self.mode != "sim" and self.aruco is not None:
             self.proxy = MarkerObstacleProxy(self.aruco, pid, d["marker_size_m"], self.cfg["obstacle"]["max_range_m"],
                                              self.cfg["proxy"].get("obstacle_width_factor", 3.0))
 
@@ -402,7 +416,9 @@ class Engine(object):
         proxy_seen = None
         if real_depth is None and self.proxy is not None and frame is not None and frame.intrinsics is not None:
             depth, proxy_seen = self.proxy.depth(color, frame.intrinsics)      # stand-in, NOT measured depth
-            kind_text += " + MARKER-OBSTACLE PROXY"
+            kind_text += " + " + self.proxy.kind_label
+        elif self.proxy_err and self.mode != "sim":
+            kind_text += " | YOLO UNAVAILABLE"
         label = frame.label if frame else self.source_msg
         acting = self.act and self._motion_allowed()
         mode_text = ("ACTING" if acting else "PERCEPTION ONLY") + (" | SIM" if self.mode == "sim" else " | HARDWARE")
@@ -439,14 +455,21 @@ class Engine(object):
             v_depth = pc.colorize_depth(depth, self.ocfg["max_range_m"]) if depth is not None else \
                 placeholder("NO DEPTH STREAM", "distance is NOT estimated without depth")
             if depth is not None:
-                cv2.putText(v_depth, "PROXY DEPTH: tagged boxes only, NOT measured" if proxy_seen is not None
+                cv2.putText(v_depth, self.proxy.depth_note if proxy_seen is not None
                             else kind_text + " DEPTH", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2,
                             cv2.LINE_AA)
             for s in (proxy_seen or []):
                 hh = v_obs.shape[0]
                 cv2.rectangle(v_obs, (s["cols"][0], 40), (s["cols"][1], hh - 56), (0, 165, 255), 2)
-                cv2.putText(v_obs, "TAGGED BOX %.2f m" % s["distance_m"], (s["cols"][0] + 4, 58),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2, cv2.LINE_AA)
+                if s.get("box"):                             # YOLO: also outline the detected bottle itself
+                    b = s["box"]
+                    cv2.rectangle(v_obs, (b[0], b[1]), (b[2], b[3]), (0, 255, 0), 2)
+                if s["distance_m"] is None:
+                    txt = "%s (lying down: no distance)" % self.proxy.item_label
+                else:
+                    txt = "%s %s%.2f m" % (self.proxy.item_label, "<= " if s.get("cropped") else "~", s["distance_m"]) \
+                        if s.get("box") else "%s %.2f m" % (self.proxy.item_label, s["distance_m"])
+                cv2.putText(v_obs, txt, (s["cols"][0] + 4, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2, cv2.LINE_AA)
         else:
             v_obs = placeholder("NO CAMERA", self.source_msg)
             v_dock = placeholder("NO CAMERA", self.source_msg)

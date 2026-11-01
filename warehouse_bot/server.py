@@ -234,9 +234,14 @@ def main(argv=None):
     ap.add_argument("--camera", help="auto|realsense|webcam|video:<file>|session:<dir>|none")
     ap.add_argument("--results", help="results folder (default ./results)")
     ap.add_argument("--focal-px", type=float, help="webcam focal length in pixels (tools/calibrate_webcam_focal.py)")
-    ap.add_argument("--webcam-index", type=int, help="which webcam (0 = the laptop's own, 1 = first external)")
+    ap.add_argument("--webcam-index", type=int, help="which webcam (python tools/list_cameras.py shows which index is which)")
     ap.add_argument("--obstacle-marker-id", type=int,
                     help="treat boxes tagged with this ArUco id as obstacles (no depth camera)")
+    ap.add_argument("--yolo-bottle", action="store_true",
+                    help="detect a water bottle with pretrained YOLO and treat it as the obstacle (no depth camera); "
+                         "needs --focal-px and --bottle-height-cm")
+    ap.add_argument("--bottle-height-cm", type=float, help="MEASURED height of your bottle in cm (upright)")
+    ap.add_argument("--yolo-model", help="YOLO weights (default yolov8n.pt, downloaded on first use)")
     ap.add_argument("--dock-distance-cm", type=float, help="stop docking at this camera-to-marker distance (default 40)")
     ap.add_argument("--aruco-dict", help="marker family, e.g. DICT_4X4_50 (default) or DICT_6X6_50")
     ap.add_argument("--marker-id", type=int, help="ArUco id of the docking marker (default 0)")
@@ -255,6 +260,14 @@ def main(argv=None):
         cfg["camera"]["webcam_index"] = a.webcam_index
     if a.obstacle_marker_id is not None:
         cfg["proxy"]["obstacle_marker_id"] = a.obstacle_marker_id
+    if a.yolo_bottle:
+        if not a.bottle_height_cm or not cfg["camera"].get("focal_px"):
+            ap.error("--yolo-bottle needs --bottle-height-cm (measure the bottle) and --focal-px (tools/calibrate_webcam_focal.py): "
+                     "distance is estimated from these, never guessed")
+        cfg["proxy"]["yolo_bottle"] = True
+        cfg["proxy"]["bottle_height_cm"] = a.bottle_height_cm
+    if a.yolo_model:
+        cfg["proxy"]["yolo_model"] = a.yolo_model
     if a.dock_distance_cm:
         cfg["docking"]["dock_distance_m"] = a.dock_distance_cm / 100.0
     if a.aruco_dict:

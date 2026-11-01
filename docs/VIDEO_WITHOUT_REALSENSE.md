@@ -73,6 +73,19 @@ Box with marker 3, about 1.3 m ahead, roughly centered; open floor around it.
 4. **STOP** when done. Click **Snapshot**.
 Limits: it only sees tagged boxes, only inside the camera's view, and never reverses. Leave space; keep a hand ready.
 
+## 5b. Obstacle avoidance with a YOLO water bottle (instead of the tagged box)
+A pretrained YOLO model (COCO, `yolov8n.pt`, nothing trained by us) finds a **bottle**. The webcam cannot measure distance, so the distance
+is **estimated from the bottle's apparent height**: `distance = focal_px x bottle_height / height_in_pixels`. Measure your bottle (upright, cm).
+1. Check what YOLO sees (window, Q quits). Stand the bottle upright at a tape-measured 50 and 80 cm and compare the estimate:
+   ```
+   python tools/check_bottle_detection.py --index 0 --focal-px 981 --bottle-height-cm 20
+   ```
+   If a shiny metal bottle is missed: `--conf 0.15`, or `--all` to see what YOLO calls it (cup? vase?) and then `--classes bottle,cup`.
+2. Start the dashboard with `--yolo-bottle --bottle-height-cm 20` in place of `--obstacle-marker-id 3` (same other flags).
+3. Run like step 5: **Avoid**, **Execute actions**, **advance when path is clear**. The chip says **LIVE WEBCAM + YOLO-BOTTLE PROXY**.
+Limits to say out loud: only bottles are seen; upright bottle only; distance is a size-based estimate (roughly +-10-15 %), not a measurement; a bottle cut
+off by the picture edge gives an upper bound (`<=`); it never reverses; the avoidance zone is drawn 3 bottle-widths wide as a safety margin.
+
 ## 6. Record: ArUco docking (autonomous)
 Marker 2 about 1.2 m ahead, offset 20-30 cm to one side so you can see the alignment.
 1. Start screen recording. **ARM**. Remove the obstacle box.

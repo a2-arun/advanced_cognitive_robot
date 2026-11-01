@@ -39,6 +39,13 @@ DEFAULTS = {
         # Stand-in for a depth camera: a box tagged with its own ArUco marker is treated as the obstacle.
         "obstacle_marker_id": None,   # e.g. 3 (same dictionary as the docking marker); None = off
         "obstacle_width_factor": 3.0, # tagged box assumed this many marker-widths wide
+        # Pretrained YOLO finds a water bottle; distance is ESTIMATED from its apparent height (needs focal_px and the bottle height).
+        "yolo_bottle": False,
+        "bottle_height_cm": None,     # MEASURE your bottle (cm). Required when yolo_bottle is on.
+        "yolo_model": "yolov8n.pt",   # downloaded automatically on first use
+        "yolo_classes": ["bottle"],
+        "yolo_conf": 0.30,
+        "yolo_imgsz": 480,
     },
     "obstacle": {
         # Regions of interest as fractions of the image (x0, x1, y0, y1).
