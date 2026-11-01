@@ -137,14 +137,38 @@ class RealSenseSource(object):
             pass
 
 
-def _open_capture(index):
-    """Open a camera by index. On Windows use DirectShow first: it gives a stable index order and opens quickly."""
+def _backends():
+    """OpenCV capture backends to try, in order. Windows cameras often work with only ONE of DirectShow / Media
+    Foundation (the Camera app uses Media Foundation), so we try both and keep the one that really delivers frames."""
     if os.name == "nt":
-        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-        if cap.isOpened():
+        return [("DSHOW", getattr(cv2, "CAP_DSHOW", None)), ("MSMF", getattr(cv2, "CAP_MSMF", None)), ("ANY", None)]
+    return [("ANY", None)]
+
+
+def _delivers_frames(cap, tries=12):
+    """Cameras often return nothing for the first few reads (auto-exposure warm-up): retry for about a second."""
+    for _ in range(tries):
+        ok, img = cap.read()
+        if ok and img is not None:
+            return True
+        time.sleep(0.08)
+    return False
+
+
+def open_with_backend(index, backend_code):
+    return cv2.VideoCapture(index) if backend_code is None else cv2.VideoCapture(index, backend_code)
+
+
+def _open_capture(index):
+    """Open a camera by index with the first backend that opens it AND delivers a frame."""
+    for name, code in _backends():
+        if os.name == "nt" and name != "ANY" and code is None:
+            continue
+        cap = open_with_backend(index, code)
+        if cap.isOpened() and _delivers_frames(cap):
             return cap
         cap.release()
-    return cv2.VideoCapture(index)
+    return cv2.VideoCapture(index)       # nothing verified: return a plain one so the caller can report the failure
 
 
 def list_webcams(max_index=6):

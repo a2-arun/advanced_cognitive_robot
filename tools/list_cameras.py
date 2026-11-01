@@ -19,7 +19,34 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from warehouse_bot import camera
 
 
+def verbose_probe(max_index=4):
+    """Print, per camera index and per backend, whether it opens and delivers frames. Saves NO pictures."""
+    import time
+    for i in range(max_index):
+        for name, code in camera._backends():
+            if name != "ANY" and code is None:
+                continue
+            cap = camera.open_with_backend(i, code)
+            opened = cap.isOpened()
+            got = None
+            if opened:
+                for _ in range(12):
+                    ok, img = cap.read()
+                    if ok and img is not None:
+                        got = "%dx%d" % (img.shape[1], img.shape[0])
+                        break
+                    time.sleep(0.08)
+            cap.release()
+            print("index %d  backend %-5s  opened=%-5s  frames=%s" % (i, name, opened, got or "NONE"))
+
+
 def main():
+    if "--verbose" in sys.argv:
+        verbose_probe()
+        print("\nIf an index says opened=True but frames=NONE on every backend: another app is using the camera (close the Camera app,")
+        print("Teams, Zoom, browser tabs), or Windows blocks desktop apps: Settings > Privacy & security > Camera >")
+        print("'Let desktop apps access your camera' = On.")
+        return 0
     out_dir = os.path.join("results", "cameras")
     os.makedirs(out_dir, exist_ok=True)
     cams = camera.list_webcams()
