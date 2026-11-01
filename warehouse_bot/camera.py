@@ -137,12 +137,51 @@ class RealSenseSource(object):
             pass
 
 
+def _open_capture(index):
+    """Open a camera by index. On Windows use DirectShow first: it gives a stable index order and opens quickly."""
+    if os.name == "nt":
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            return cap
+        cap.release()
+    return cv2.VideoCapture(index)
+
+
+def list_webcams(max_index=6):
+    """Probe camera indices 0..max_index-1. Returns [(index, width, height)] for those that deliver a frame."""
+    found = []
+    for i in range(max_index):
+        cap = _open_capture(i)
+        try:
+            if cap.isOpened():
+                ok, img = cap.read()
+                if ok and img is not None:
+                    found.append((i, img.shape[1], img.shape[0]))
+        finally:
+            cap.release()
+    return found
+
+
+def resolve_webcam_index(index):
+    """The index to use. An explicit index is used as given. With None: exactly one camera -> that one;
+    several -> refuse (we never guess between the laptop's own camera and a USB webcam)."""
+    if index is not None:
+        return int(index)
+    cams = list_webcams()
+    if not cams:
+        raise SourceError("no webcam found")
+    if len(cams) > 1:
+        raise SourceError("several cameras found %s - choose one with --webcam-index N "
+                          "(run: python tools/list_cameras.py to see which is which)" % [c[0] for c in cams])
+    return cams[0][0]
+
+
 class WebcamSource(object):
     """Plain RGB camera (laptop webcam, or the D455 colour stream exposed as /dev/video*). NO depth."""
     kind = KIND_LIVE
 
     def __init__(self, index=0, width=640, height=480, focal_px=None):
-        self.cap = cv2.VideoCapture(index)
+        self.cap = _open_capture(index)
         if not self.cap.isOpened():
             raise SourceError("cannot open webcam index %s" % index)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -248,8 +287,9 @@ def open_source(spec, cfg):
             return None, "no camera source selected"
         if spec == "realsense":
             return RealSenseSource(c["width"], c["height"], c["fps"]), "RealSense opened"
-        if spec == "webcam":
-            return WebcamSource(c["webcam_index"], c["width"], c["height"], c.get("focal_px")), "webcam opened"
+        if spec == "webcam" or spec.startswith("webcam:"):
+            idx = resolve_webcam_index(int(spec.split(":")[1]) if ":" in spec else c.get("webcam_index"))
+            return WebcamSource(idx, c["width"], c["height"], c.get("focal_px")), "webcam #%d opened" % idx
         if spec.startswith("video:"):
             return VideoFileSource(spec[6:]), "video opened"
         if spec.startswith("session:"):
@@ -259,8 +299,9 @@ def open_source(spec, cfg):
                 return RealSenseSource(c["width"], c["height"], c["fps"]), "RealSense opened"
             except SourceError as e1:
                 try:
-                    return WebcamSource(c["webcam_index"], c["width"], c["height"]), \
-                        "RealSense unavailable (%s); using webcam, RGB only" % e1
+                    idx = resolve_webcam_index(c.get("webcam_index"))
+                    return WebcamSource(idx, c["width"], c["height"], c.get("focal_px")), \
+                        "RealSense unavailable (%s); using webcam #%d, RGB only" % (e1, idx)
                 except SourceError as e2:
                     return None, "no camera: RealSense: %s | webcam: %s" % (e1, e2)
         return None, "unknown camera source %r" % spec

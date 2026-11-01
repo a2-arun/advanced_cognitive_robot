@@ -23,7 +23,7 @@ or run `python -m serial.tools.list_ports`. The firmware is already on the Ardui
 
 ## 1. Physical setup
 - **Webcam** on the front of the robot, facing forward, level, about 15-25 cm high, fixed firmly (a shaking camera ruins distance).
-  The laptop's built-in webcam cannot ride on the robot: use an external USB webcam (then `--webcam-index 1`).
+  The laptop's built-in webcam cannot ride on the robot: use an external USB webcam (then pick its number with step 1b).
 - **Cables** long enough that the robot can move about 1.5 m and not get dragged or wound into the wheels.
 - **Clear floor** at least 3 m x 1.5 m. Wheels lifted for the first test.
 - **Dock marker:** your existing 6x6 **ID 2** page, flat on a wall/box at camera height.
@@ -33,18 +33,28 @@ or run `python -m serial.tools.list_ports`. The firmware is already on the Ardui
   ```
   Print at 100 %, measure the black square, stick it flat in the middle of the front face of a box about 30 cm wide, at camera height.
 
+## 1b. Pick the USB webcam, NOT the laptop camera
+The laptop's built-in camera is usually index 0, but the order can change. Never guess:
+```
+python tools/list_cameras.py
+```
+It prints each working camera and saves a labelled picture to `results/cameras/cameras.jpg`. Open it: the tile that shows what your
+robot's webcam sees is the number to use as `--webcam-index N` everywhere below. If you are unsure: unplug the USB webcam, run it,
+plug it back in, run it again. The index that appears is the USB webcam. If there is more than one camera and you do not
+choose, the software now refuses and tells you, instead of silently opening the laptop camera.
+
 ## 2. Measure the webcam's focal length (one minute, once)
 Put marker ID 2 flat, facing the camera squarely, **exactly 50 cm from the lens** (tape measure), keep still:
 ```
-python tools/calibrate_webcam_focal.py --distance-cm 50 --marker-size-cm 9.5 --dict DICT_6X6_50 --id 2 --index 1
+python tools/calibrate_webcam_focal.py --distance-cm 50 --marker-size-cm 9.5 --dict DICT_6X6_50 --id 2 --index N
 ```
 It prints `Use:  --focal-px 5xx`. Write that number down. (If it says the marker was seen in too few frames: more light, marker flatter, 30-80 cm.)
 Use your REAL measured black-square size instead of 9.5 if it differs. If you change the camera position/zoom, redo this.
 
 ## 3. Start the dashboard (laptop, PowerShell, in the project folder)
-Replace `COM5`, the webcam index and the focal number:
+Replace `COM5`, `N` (your USB webcam index from step 1b) and the focal number:
 ```
-python -m warehouse_bot --mode hardware --serial-port COM5 --camera webcam --webcam-index 1 --focal-px 550 --aruco-dict DICT_6X6_50 --marker-id 2 --marker-size-cm 9.5 --obstacle-marker-id 3 --dock-distance-cm 50 --config configs/webcam_demo.json --results results/clip_no_realsense
+python -m warehouse_bot --mode hardware --serial-port COM5 --camera webcam --webcam-index N --focal-px 550 --aruco-dict DICT_6X6_50 --marker-id 2 --marker-size-cm 9.5 --obstacle-marker-id 3 --dock-distance-cm 50 --config configs/webcam_demo.json --results results/clip_no_realsense
 ```
 Open the printed URL. You should see the amber chip, a live webcam view, and **ARM** enabled once the serial link is up.
 (`--config configs/webcam_demo.json` makes the pulses gentler: 150 ms teleop, 80-200 ms docking.)
@@ -78,7 +88,7 @@ Optionally keep recording the docking panel with **rec dock**, then **Snapshot**
 | Dock distance shows `n/a` / "will NOT approach blindly" | No `--focal-px`. Redo step 2 and pass it. |
 | Distance wrong by a lot | Marker size or focal wrong. Re-measure the black square; recalibrate at a measured 50 cm. |
 | Robot overshoots / oscillates | Lower pulses in `configs/webcam_demo.json`, or move the camera to the very front. |
-| Webcam opens the laptop's own camera | Add `--webcam-index 1` (try 2). |
+| Webcam shows the laptop's own camera | Wrong index: rerun `python tools/list_cameras.py`, look at the picture, pass the right `--webcam-index N`. |
 | Marker not detected | More even light, no glare, flat paper, within about 0.3-1.5 m, correct `--aruco-dict`/`--marker-id`. |
 | Port 8080 busy | Open the URL it prints. |
 

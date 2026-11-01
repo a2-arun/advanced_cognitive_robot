@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Show which camera index is which, so you pick the USB webcam and not the laptop's own camera.
+
+    python tools/list_cameras.py
+
+It opens cameras 0..5 briefly (the laptop camera light may flash), prints each one that works, and saves a labelled
+picture of what each sees to results/cameras/cameras.jpg and results/cameras/cam_N.jpg. Open the picture: the tile that shows
+the view from your robot's webcam is the index to use (--webcam-index N).
+
+Certain way to tell: unplug the USB webcam, run this, plug it back in, run again. The index that appears is the USB webcam.
+"""
+import os
+import sys
+
+import cv2
+import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from warehouse_bot import camera
+
+
+def main():
+    out_dir = os.path.join("results", "cameras")
+    os.makedirs(out_dir, exist_ok=True)
+    cams = camera.list_webcams()
+    if not cams:
+        print("No camera delivered a frame. Is the USB webcam plugged in? Is another app (Teams, browser) using it?")
+        return 1
+    tiles = []
+    for idx, w, h in cams:
+        cap = camera._open_capture(idx)
+        img = None
+        for _ in range(8):                      # let auto-exposure settle
+            ok, frame = cap.read()
+            if ok:
+                img = frame
+        cap.release()
+        if img is None:
+            continue
+        cv2.imwrite(os.path.join(out_dir, "cam_%d.jpg" % idx), img)
+        tile = cv2.resize(img, (426, 320))
+        cv2.rectangle(tile, (0, 0), (426, 34), (0, 0, 0), -1)
+        cv2.putText(tile, "--webcam-index %d  (%dx%d)" % (idx, w, h), (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        tiles.append(tile)
+        print("camera index %d: %dx%d" % (idx, w, h))
+    cols = min(3, len(tiles))
+    rows = [np.hstack(tiles[i:i + cols] + [np.zeros_like(tiles[0])] * (cols - len(tiles[i:i + cols])))
+            for i in range(0, len(tiles), cols)]
+    sheet = np.vstack(rows)
+    path = os.path.join(out_dir, "cameras.jpg")
+    cv2.imwrite(path, sheet)
+    print("\nPicture saved: %s" % os.path.abspath(path))
+    print("Open it. The tile showing your robot's webcam view tells you the index to pass as --webcam-index N.")
+    print("If unsure: unplug the USB webcam, run this again; the index that disappears is the USB webcam.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

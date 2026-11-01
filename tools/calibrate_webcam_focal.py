@@ -49,13 +49,14 @@ def main(argv=None):
     ap.add_argument("--marker-size-cm", type=float, default=9.5, help="black square edge, measured")
     ap.add_argument("--dict", default="DICT_6X6_50")
     ap.add_argument("--id", type=int, default=2)
-    ap.add_argument("--index", type=int, default=0, help="webcam index (0 = laptop's own)")
+    ap.add_argument("--index", type=int, default=None,
+                    help="webcam index. REQUIRED if several cameras exist (python tools/list_cameras.py shows which is which)")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--seconds", type=float, default=5.0)
     a = ap.parse_args(argv)
     try:
-        src = camera.WebcamSource(a.index, a.width, a.height)
+        src = camera.WebcamSource(camera.resolve_webcam_index(a.index), a.width, a.height)
     except camera.SourceError as e:
         print("FAIL:", e)
         return 1

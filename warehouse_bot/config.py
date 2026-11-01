@@ -32,7 +32,7 @@ DEFAULTS = {
         "width": 640,
         "height": 480,
         "fps": 15,                    # Jetson Nano USB3 + depth: 15 fps is plenty for stop-and-go motion
-        "webcam_index": 0,
+        "webcam_index": None,         # None = refuse to guess when several cameras exist (laptop cam vs USB webcam)
         "focal_px": None,             # webcam only: focal length in pixels at `width` (tools/calibrate_webcam_focal.py)
     },
     "proxy": {
