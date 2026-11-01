@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-point focal-length calibration for a plain webcam, so ArUco marker size can give distance.
 
-    python tools/calibrate_webcam_focal.py --distance-cm 50 --marker-size-cm 9.5 --dict DICT_6X6_50 --id 2
+    python tools/calibrate_webcam_focal.py --distance-cm 50 --marker-size-cm 9.5 --dict DICT_6X6_50 --id 2 --index 0
 
 How: put the marker FLAT on a wall/box, facing the camera squarely. Measure the distance from the camera lens to the
 marker with a tape measure (e.g. 50 cm) and the width of the BLACK square with a ruler. Keep both still while this runs.
@@ -9,6 +9,9 @@ focal_px = (measured marker edge in pixels) * distance / marker edge.
 
 Accuracy is roughly +-5 %, limited by how well you measure and how square-on the marker is. It assumes no lens
 distortion. Use the printed --focal-px value on the dashboard:  python -m warehouse_bot ... --focal-px <value>
+
+If the marker is not found, the tool tells you what the camera DID see (brightness, markers of other families/ids) and saves
+a picture to results/cameras/focal_debug.jpg so you can look at what the camera sees.
 """
 import argparse
 import json
@@ -16,6 +19,7 @@ import os
 import sys
 import time
 
+import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -30,6 +34,20 @@ def edge_px(quad):
     return float(np.mean([np.linalg.norm(quad[i] - quad[(i + 1) % 4]) for i in range(4)]))
 
 
+def warm_up(source, seconds=4.0, min_reads=15, bright=25.0):
+    """Read and discard frames until the picture is not black (webcam auto-exposure takes 1-3 s). Returns the last frame."""
+    t0, n, last = time.time(), 0, None
+    while time.time() - t0 < seconds:
+        f = source.read()
+        if f is None:
+            continue
+        n += 1
+        last = f
+        if n >= min_reads and float(f.color.mean()) > bright:
+            break
+    return last
+
+
 def measure(source, detector, marker_id, seconds=5.0, max_frames=400):
     sizes, t0, n = [], time.time(), 0
     while time.time() - t0 < seconds and n < max_frames:
@@ -41,6 +59,20 @@ def measure(source, detector, marker_id, seconds=5.0, max_frames=400):
             if mid == marker_id:
                 sizes.append(edge_px(quad))
     return sizes
+
+
+def diagnose_frame(color):
+    """What markers of ANY ArUco family are visible in this frame? Returns {dictionary_name: [ids]}."""
+    found = {}
+    for name in sorted(n for n in dir(cv2.aruco) if n.startswith("DICT_") and "MIP" not in n):
+        try:
+            det = docking.ArucoDetector({"aruco_dict": name, "marker_id": 0, "marker_size_m": 0.1})
+            ids = sorted(set(i for i, _ in det.detect_all(color)))
+        except Exception:
+            continue
+        if ids:
+            found[name] = ids
+    return found
 
 
 def main(argv=None):
@@ -61,11 +93,37 @@ def main(argv=None):
         print("FAIL:", e)
         return 1
     det = docking.ArucoDetector({"aruco_dict": a.dict, "marker_id": a.id, "marker_size_m": a.marker_size_cm / 100.0})
+    print("warming up the camera (auto-exposure)...")
+    last = warm_up(src)
     print("measuring for %.0f s... keep the marker still and square-on" % a.seconds)
     sizes = measure(src, det, a.id, a.seconds)
+    if last is not None:
+        last = src.read() or last
     src.close()
     if len(sizes) < 10:
-        print("FAIL: marker id %d seen in only %d frames. Check the id/dictionary, light, distance (0.3-1 m)." % (a.id, len(sizes)))
+        print("\nFAIL: marker id %d (%s) seen in only %d frames." % (a.id, a.dict, len(sizes)))
+        if last is None:
+            print("The camera delivered no frames at all. Close other apps using it, or check --index.")
+            return 1
+        bright = float(last.color.mean())
+        seen = diagnose_frame(last.color)
+        print("What the camera saw: brightness %.0f/255 (%s), picture %dx%d" % (
+            bright, "TOO DARK/black: more light, wait, or wrong camera" if bright < 25 else "ok", last.color.shape[1], last.color.shape[0]))
+        if seen:
+            for name, ids in seen.items():
+                print("  it DOES see markers: %s ids %s" % (name, ids))
+            print("-> Use the matching --dict and --id (and re-measure)." if a.dict not in seen else
+                  "-> It sees the family but not id %d: wrong marker, or a different id." % a.id)
+        else:
+            print("  no ArUco marker of any family is visible. Check: marker fully in view with its white border, flat (not curled),"
+                  " no glare, 30-80 cm away, camera is the Logitech (--index).")
+        vis = last.color.copy()
+        cv2.putText(vis, "focal calibration: nothing found for %s id %d" % (a.dict, a.id), (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                    (0, 255, 255), 2)
+        os.makedirs(os.path.join("results", "cameras"), exist_ok=True)
+        path = os.path.join("results", "cameras", "focal_debug.jpg")
+        cv2.imwrite(path, vis)
+        print("Saved what the camera sees: %s  (open it)" % os.path.abspath(path))
         return 1
     f = focal_from_sizes(sizes, a.distance_cm / 100.0, a.marker_size_cm / 100.0)
     spread = 100.0 * (np.percentile(sizes, 90) - np.percentile(sizes, 10)) / np.median(sizes)

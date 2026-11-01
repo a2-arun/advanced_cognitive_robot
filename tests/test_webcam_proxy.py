@@ -75,6 +75,35 @@ class FocalTests(unittest.TestCase):
         self.assertEqual(t.measure(FakeWebcam([(5, 320, 0.5)]), det, 2, seconds=0.5, max_frames=8), [])
 
 
+class FocalDiagnosisTests(unittest.TestCase):
+    def test_diagnose_reports_the_family_and_id_that_is_actually_visible(self):
+        t = load_tool("calibrate_webcam_focal")
+        img = np.full((H, W, 3), 190, np.uint8)
+        m = cv2.cvtColor(docking.generate_marker("DICT_4X4_50", 7, 120), cv2.COLOR_GRAY2BGR)
+        img[100:220, 200:320] = m
+        seen = t.diagnose_frame(img)
+        self.assertIn("DICT_4X4_50", seen)
+        self.assertIn(7, seen["DICT_4X4_50"])
+        self.assertNotIn("DICT_6X6_50", seen)               # so the tool can say: wrong family
+
+    def test_diagnose_on_empty_scene_finds_nothing(self):
+        t = load_tool("calibrate_webcam_focal")
+        self.assertEqual(t.diagnose_frame(np.full((H, W, 3), 190, np.uint8)), {})
+
+    def test_warm_up_skips_black_frames(self):
+        t = load_tool("calibrate_webcam_focal")
+
+        class Slow(object):
+            n = 0
+
+            def read(self):
+                Slow.n += 1
+                img = np.zeros((H, W, 3), np.uint8) if Slow.n < 25 else np.full((H, W, 3), 120, np.uint8)
+                return Frame(img, None, None, "live", "x")
+        f = t.warm_up(Slow(), seconds=3.0)
+        self.assertGreater(float(f.color.mean()), 25)
+
+
 class ProxyTests(unittest.TestCase):
     def setUp(self):
         cfg = load_config()
