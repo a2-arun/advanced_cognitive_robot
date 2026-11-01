@@ -10,6 +10,9 @@ focal_px = (measured marker edge in pixels) * distance / marker edge.
 Accuracy is roughly +-5 %, limited by how well you measure and how square-on the marker is. It assumes no lens
 distortion. Use the printed --focal-px value on the dashboard:  python -m warehouse_bot ... --focal-px <value>
 
+A window opens showing the live camera with the detected marker outlined; move the marker until it says FOUND, then press SPACE.
+(--no-preview skips the window.)
+
 If the marker is not found, the tool tells you what the camera DID see (brightness, markers of other families/ids) and saves
 a picture to results/cameras/focal_debug.jpg so you can look at what the camera sees.
 """
@@ -61,6 +64,57 @@ def measure(source, detector, marker_id, seconds=5.0, max_frames=400):
     return sizes
 
 
+def annotate_preview(color, detector, marker_id, note=""):
+    """Draw every detected marker (green = the wanted one, orange = another id) and a status line. Returns (image, wanted_edge_px or None)."""
+    vis = color.copy()
+    h, w = vis.shape[:2]
+    wanted = None
+    for mid, quad in detector.detect_all(color):
+        ok = mid == marker_id
+        col = (0, 220, 0) if ok else (0, 140, 255)
+        cv2.polylines(vis, [quad.astype(np.int32).reshape(-1, 1, 2)], True, col, 3)
+        cv2.putText(vis, "id %d" % mid, (int(quad[0][0]), max(int(quad[0][1]) - 8, 14)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2)
+        if ok:
+            wanted = edge_px(quad)
+    if wanted is not None:
+        msg, col = "FOUND id %d  edge %.0f px  -> press SPACE to measure" % (marker_id, wanted), (0, 220, 0)
+    else:
+        msg, col = "id %d NOT found: show the WHOLE black square + white border, flat, square-on" % marker_id, (0, 0, 255)
+    cv2.rectangle(vis, (0, 0), (w, 30), (0, 0, 0), -1)
+    cv2.putText(vis, msg, (8, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.55, col, 2)
+    if note:
+        cv2.putText(vis, note, (8, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+    return vis, wanted
+
+
+def live_preview(source, detector, marker_id, window="focal calibration (SPACE = measure, Q = quit)"):
+    """Show the camera live until SPACE is pressed. Returns True to go on, False to quit, None if no window can be shown."""
+    try:
+        cv2.namedWindow(window)
+    except cv2.error:
+        return None
+    try:
+        while True:
+            f = source.read()
+            if f is None:
+                continue
+            vis, _ = annotate_preview(f.color, detector, marker_id)
+            cv2.imshow(window, vis)
+            k = cv2.waitKey(1) & 0xFF
+            if k == 32:
+                return True
+            if k in (ord("q"), ord("Q"), 27):
+                return False
+    except cv2.error:
+        return None
+    finally:
+        try:
+            cv2.destroyWindow(window)
+            cv2.waitKey(1)
+        except cv2.error:
+            pass
+
+
 def diagnose_frame(color):
     """What markers of ANY ArUco family are visible in this frame? Returns {dictionary_name: [ids]}."""
     found = {}
@@ -86,6 +140,7 @@ def main(argv=None):
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--seconds", type=float, default=5.0)
+    ap.add_argument("--no-preview", action="store_true", help="skip the live window (default: show it so you can line the marker up)")
     a = ap.parse_args(argv)
     try:
         src = camera.WebcamSource(camera.resolve_webcam_index(a.index), a.width, a.height)
@@ -95,6 +150,15 @@ def main(argv=None):
     det = docking.ArucoDetector({"aruco_dict": a.dict, "marker_id": a.id, "marker_size_m": a.marker_size_cm / 100.0})
     print("warming up the camera (auto-exposure)...")
     last = warm_up(src)
+    if not a.no_preview:
+        print("A window shows what the camera sees. Move the marker until it says FOUND (green outline), then press SPACE. Q quits.")
+        go = live_preview(src, det, a.id)
+        if go is False:
+            src.close()
+            print("Quit.")
+            return 1
+        if go is None:
+            print("(no window available here; measuring without a preview)")
     print("measuring for %.0f s... keep the marker still and square-on" % a.seconds)
     sizes = measure(src, det, a.id, a.seconds)
     if last is not None:

@@ -86,6 +86,22 @@ class FocalDiagnosisTests(unittest.TestCase):
         self.assertIn(7, seen["DICT_4X4_50"])
         self.assertNotIn("DICT_6X6_50", seen)               # so the tool can say: wrong family
 
+    def test_preview_outlines_the_wanted_marker_and_reports_its_size(self):
+        t = load_tool("calibrate_webcam_focal")
+        det = docking.ArucoDetector({"aruco_dict": DICT, "marker_id": 2, "marker_size_m": SIZE_M})
+        frame = FakeWebcam([(2, 320, 0.5)]).read().color
+        vis, edge = t.annotate_preview(frame, det, 2)
+        self.assertIsNotNone(edge)
+        self.assertGreater(edge, 20)
+        self.assertEqual(vis.shape, frame.shape)
+        self.assertFalse(np.array_equal(vis, frame))         # something was drawn
+
+    def test_preview_says_not_found_when_marker_absent(self):
+        t = load_tool("calibrate_webcam_focal")
+        det = docking.ArucoDetector({"aruco_dict": DICT, "marker_id": 2, "marker_size_m": SIZE_M})
+        vis, edge = t.annotate_preview(np.full((H, W, 3), 190, np.uint8), det, 2)
+        self.assertIsNone(edge)
+
     def test_diagnose_on_empty_scene_finds_nothing(self):
         t = load_tool("calibrate_webcam_focal")
         self.assertEqual(t.diagnose_frame(np.full((H, W, 3), 190, np.uint8)), {})
