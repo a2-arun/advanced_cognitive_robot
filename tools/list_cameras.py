@@ -11,6 +11,7 @@ Certain way to tell: unplug the USB webcam, run this, plug it back in, run again
 """
 import os
 import sys
+import time
 
 import cv2
 import numpy as np
@@ -56,11 +57,14 @@ def main():
     tiles = []
     for idx, w, h in cams:
         cap = camera._open_capture(idx)
-        img = None
-        for _ in range(8):                      # let auto-exposure settle
+        img, bright = None, 0.0
+        for k in range(75):                     # auto-exposure can take 1-3 s (webcams start BLACK): wait until bright
             ok, frame = cap.read()
-            if ok:
-                img = frame
+            if ok and frame is not None:
+                img, bright = frame, float(frame.mean())
+                if k >= 20 and bright > 25:
+                    break
+            time.sleep(0.04)
         cap.release()
         if img is None:
             continue
@@ -69,7 +73,8 @@ def main():
         cv2.rectangle(tile, (0, 0), (426, 34), (0, 0, 0), -1)
         cv2.putText(tile, "--webcam-index %d  (%dx%d)" % (idx, w, h), (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         tiles.append(tile)
-        print("camera index %d: %dx%d" % (idx, w, h))
+        print("camera index %d: %dx%d  brightness %.0f%s" % (idx, w, h, bright,
+                                                          "   <-- still black: wait/more light, or this is an IR camera" if bright < 15 else ""))
     cols = min(3, len(tiles))
     rows = [np.hstack(tiles[i:i + cols] + [np.zeros_like(tiles[0])] * (cols - len(tiles[i:i + cols])))
             for i in range(0, len(tiles), cols)]
