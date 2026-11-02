@@ -1,4 +1,4 @@
-# Test checklist
+# Test checklist.
 
 Tick a row only when you saw the expected result yourself. The "Software" column was already verified by automated
 tests (`python -m unittest discover -s tests` → `OK`); the "On robot" column is **yours to confirm** — until then do
